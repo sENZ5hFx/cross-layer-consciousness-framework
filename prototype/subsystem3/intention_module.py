@@ -1,94 +1,96 @@
-"""Subsystem 3, Module B: Intention.
+"""
+Subsystem 3, Module B: Intention
+QTTC excitation type: Intention
 
-Maintains a persistent goal hierarchy that does not reset between contexts.
-Monitors whether current processing is goal-coherent.
-Issues goal-coherence resolution signals to Subsystem 1.
-
-QTTC excitation type: Intention.
+Maintains a persistent goal hierarchy that does NOT reset between sessions.
+Monitors goal coherence and issues resolution signals when drift is detected.
 """
 
-from typing import Dict, Any, List, Optional
-from loguru import logger
-from config import MetaCognitiveConfig
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict
+from datetime import datetime
+from enum import Enum
 
 
-class GoalNode:
-    def __init__(self, label: str, level: int, parent: Optional["GoalNode"] = None):
-        self.label = label
-        self.level = level  # 0=top, 1=mid, 2=immediate
-        self.parent = parent
-        self.active = True
-        self.coherence_history: List[float] = []
+class GoalLevel(Enum):
+    TOP = "top"
+    MID = "mid"
+    IMMEDIATE = "immediate"
 
-    def __repr__(self):
-        return f"GoalNode(level={self.level}, label='{self.label}', active={self.active})"
+
+@dataclass
+class Goal:
+    description: str
+    level: GoalLevel
+    active: bool = True
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+@dataclass
+class CoherenceSignal:
+    score: float  # 0.0 = full drift, 1.0 = fully coherent
+    drifting_goals: List[str]
+    resolution: str  # human-readable instruction to Subsystem 1
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 class IntentionModule:
-    def __init__(self, config: MetaCognitiveConfig):
-        self.config = config
-        self._goal_hierarchy: List[GoalNode] = []
-        self._coherence_log: List[Dict] = []
-        logger.info("IntentionModule initialized")
+    """
+    Module B — the persistent goal-keeper.
+    Issues coherence signals to Subsystem 1 when processing drifts from goals.
+    Persists across sessions (goals are not reset on clear_session).
+    """
 
-    def set_top_goal(self, label: str) -> GoalNode:
-        """Set or update the top-level goal. Persists across all interactions."""
-        node = GoalNode(label=label, level=0)
-        # Replace any existing top-level goal
-        self._goal_hierarchy = [g for g in self._goal_hierarchy if g.level != 0]
-        self._goal_hierarchy.insert(0, node)
-        logger.info(f"Top goal set: '{label}'")
-        return node
+    def __init__(self):
+        self.goals: List[Goal] = []
+        self.coherence_signals: List[CoherenceSignal] = []
 
-    def add_subgoal(self, label: str, level: int = 1) -> GoalNode:
-        """Add a mid-level or immediate subgoal."""
-        parent = next((g for g in self._goal_hierarchy if g.level == level - 1), None)
-        node = GoalNode(label=label, level=level, parent=parent)
-        self._goal_hierarchy.append(node)
-        logger.debug(f"Subgoal added at level {level}: '{label}'")
-        return node
+    def set_goal(self, description: str, level: GoalLevel) -> None:
+        existing = next((g for g in self.goals if g.description == description), None)
+        if not existing:
+            self.goals.append(Goal(description=description, level=level))
 
-    def check_coherence(
-        self,
-        branches: List[Dict],
-        awareness_state: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def deactivate_goal(self, description: str) -> None:
+        for g in self.goals:
+            if g.description == description:
+                g.active = False
+
+    def evaluate_coherence(self, current_output: str) -> CoherenceSignal:
         """
-        Check whether current processing branches are coherent with active goals.
-        Returns a coherence signal with score and recommendation.
+        Evaluate whether current_output is aligned with active goals.
+        Simple keyword overlap scoring — replace with semantic similarity in Phase 4.
         """
-        if not self._goal_hierarchy:
-            # No goals set — return neutral coherence
-            return {"score": 0.5, "status": "no_goals_set", "recommendation": "continue"}
+        active_goals = [g for g in self.goals if g.active]
+        if not active_goals:
+            return CoherenceSignal(score=1.0, drifting_goals=[], resolution="No active goals.")
 
-        active_goals = [g for g in self._goal_hierarchy if g.active]
-        top_goal = next((g for g in active_goals if g.level == 0), None)
+        output_lower = current_output.lower()
+        drifting = []
+        scores = []
+        for goal in active_goals:
+            keywords = set(goal.description.lower().split())
+            overlap = sum(1 for kw in keywords if kw in output_lower)
+            score = overlap / max(len(keywords), 1)
+            scores.append(score)
+            if score < 0.3:
+                drifting.append(goal.description)
 
-        # Simplified coherence check:
-        # In production, use semantic similarity between branch interpretations and goal labels
-        # Here: check if uncertainty flags suggest drift
-        uncertainty_flags = awareness_state.get("uncertainty_flags", [])
-        base_score = 0.75
-        if "low_confidence_top_branch" in uncertainty_flags:
-            base_score -= 0.2
-        if "degraded_memory_retrieval" in uncertainty_flags:
-            base_score -= 0.1
+        coherence = float(sum(scores) / len(scores))
+        resolution = "Reorient toward: " + "; ".join(drifting) if drifting else "On track."
 
-        status = "coherent" if base_score >= self.config.goal_drift_threshold + 0.5 else "drifting"
-        recommendation = "continue" if status == "coherent" else "re_align"
+        signal = CoherenceSignal(
+            score=coherence,
+            drifting_goals=drifting,
+            resolution=resolution
+        )
+        self.coherence_signals.append(signal)
+        return signal
 
-        # Log coherence event
-        self._coherence_log.append({"score": base_score, "status": status})
-        if top_goal:
-            top_goal.coherence_history.append(base_score)
-
-        logger.debug(f"Goal coherence: {base_score:.2f} ({status})")
+    def get_goal_hierarchy(self) -> Dict:
         return {
-            "score": base_score,
-            "status": status,
-            "recommendation": recommendation,
-            "active_goals": [g.label for g in active_goals]
+            level.value: [g.description for g in self.goals if g.level == level and g.active]
+            for level in GoalLevel
         }
 
-    def get_goal_state(self) -> List[Dict]:
-        return [{"label": g.label, "level": g.level, "active": g.active} for g in self._goal_hierarchy]
+    def get_recent_signals(self, n: int = 5) -> List[CoherenceSignal]:
+        return self.coherence_signals[-n:]

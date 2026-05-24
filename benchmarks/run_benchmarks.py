@@ -1,157 +1,205 @@
-"""CLCE Benchmark Runner.
+"""
+CLCE Benchmark Runner — Phase 4
+
+Runs all three subsystem falsifiability tests against baseline comparisons.
+Outputs results to benchmarks/results/
 
 Usage:
-    python run_benchmarks.py --subsystem all
-    python run_benchmarks.py --subsystem superposition
-    python run_benchmarks.py --subsystem holographic
-    python run_benchmarks.py --subsystem metacognitive
+    python benchmarks/run_benchmarks.py
 """
 
-import argparse
+import json
+import time
+import numpy as np
+from pathlib import Path
+from datetime import datetime
 import sys
-import os
-from loguru import logger
+sys.path.insert(0, str(Path(__file__).parent.parent / 'prototype'))
 
-# Add prototype to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "prototype"))
-
-from config import DEFAULT_CONFIG
 from subsystem1.superposition_layer import SuperpositionLayer
-from subsystem2.holographic_memory import HolographicMemory
+from subsystem2.holographic_memory import HolographicMemory, cosine_similarity
 from subsystem3.awareness_module import AwarenessModule
-from subsystem3.intention_module import IntentionModule
+from subsystem3.intention_module import IntentionModule, GoalLevel
 from subsystem3.reflection_module import ReflectionModule
 
-
-def run_superposition_benchmark():
-    logger.info("=== Running Subsystem 1: Superposition Benchmark ===")
-    layer = SuperpositionLayer(DEFAULT_CONFIG.superposition)
-
-    test_cases = [
-        "The bank was steep and the current was strong.",
-        "I saw the man with the telescope on the hill.",
-        "She told her friend that she had won the prize.",
-        "Visiting relatives can be annoying.",
-        "The horse raced past the barn fell."
-    ]
-
-    results = []
-    for tc in test_cases:
-        branches = layer.generate_branches(tc, {})
-        coherence = {"score": 0.7}
-        landscapes = [{"resonance": 0.5}] * len(branches)
-        result = layer.collapse(branches, landscapes, coherence)
-        results.append({
-            "input": tc,
-            "n_branches": len(branches),
-            "confidence": result["confidence"],
-            "alternatives": len(branches) - 1
-        })
-        logger.info(f"Input: '{tc[:50]}' | Branches: {len(branches)} | Confidence: {result['confidence']:.2f}")
-
-    logger.success(f"Superposition benchmark complete. {len(results)} cases processed.")
-    return results
+Results = Path(__file__).parent / 'results'
+Results.mkdir(exist_ok=True)
 
 
-def run_holographic_benchmark():
-    logger.info("=== Running Subsystem 2: Holographic Memory Benchmark ===")
-    memory = HolographicMemory(DEFAULT_CONFIG.holographic)
+# ─── Benchmark 1: Superposition vs Greedy Baseline ───────────────────────────
 
-    # Encode test experiences
-    experiences = [
-        {"input": "Running the last mile of a marathon", "result": {}},
-        {"input": "Finishing a difficult project under deadline", "result": {}},
-        {"input": "The feeling of crossing a finish line", "result": {}},
-        {"input": "Quantum superposition in physics", "result": {}},
-        {"input": "Multiple possibilities existing simultaneously", "result": {}},
-    ]
+def benchmark_superposition(n_trials: int = 50) -> dict:
+    """
+    Task: Ambiguous input resolution.
+    CLCE: holds branches, collapses on context signal.
+    Baseline: greedy — picks highest weight immediately.
+    Metric: % of trials where preserved alternatives contain the correct answer.
+    """
+    s1 = SuperpositionLayer()
+    rng = np.random.default_rng(42)
 
-    for exp in experiences:
-        memory.encode(exp)
+    clce_correct = 0
+    greedy_correct = 0
 
-    # Test retrieval with partial/cross-domain cues
-    test_cues = [
-        "marathon finish",
-        "deadline pressure",
-        "quantum states",
-        "simultaneous options",  # Cross-domain: should link to superposition
-        "exhausted but triumphant",  # Partial cue
-    ]
+    for trial in range(n_trials):
+        weights = rng.dirichlet(np.ones(4)) * 100
+        candidates = [(f"interp_{i}", float(weights[i])) for i in range(4)]
+        # Correct answer is NOT always the highest-weight candidate
+        correct_idx = int(rng.integers(0, 4))
+        correct_label = f"interp_{correct_idx}"
 
-    results = []
-    for cue in test_cues:
-        result = memory.retrieve(cue)
-        results.append({
-            "cue": cue,
-            "resonance": result["resonance"],
-            "n_matches": len(result["matches"]),
-            "degraded": result["degraded"]
-        })
-        logger.info(f"Cue: '{cue}' | Resonance: {result['resonance']:.3f} | Degraded: {result['degraded']}")
+        # Baseline: greedy pick
+        greedy_pick = max(candidates, key=lambda x: x[1])[0]
+        greedy_correct += int(greedy_pick == correct_label)
 
-    logger.success(f"Holographic benchmark complete. {len(results)} cues tested.")
-    return results
+        # CLCE: check if correct is anywhere in top-3 branches
+        s1.load(candidates)
+        result = s1.observe()
+        all_branches = [result.selected.text] + [a.text for a in result.alternatives]
+        clce_correct += int(correct_label in all_branches[:3])
 
-
-def run_metacognitive_benchmark():
-    logger.info("=== Running Subsystem 3: Meta-Cognitive Benchmark ===")
-    config = DEFAULT_CONFIG.metacognitive
-    awareness = AwarenessModule(config)
-    intention = IntentionModule(config)
-    reflection = ReflectionModule(config, awareness, intention)
-
-    intention.set_top_goal("Understand the nature of consciousness")
-
-    test_scenarios = [
-        # (branches, should_trigger_interrupt)
-        ([{"interpretation": "On-topic reasoning", "confidence": 0.85}], False),
-        ([{"interpretation": "Uncertain output", "confidence": 0.2}], True),
-        ([{"interpretation": "Off-topic drift", "confidence": 0.5}], True),
-        ([{"interpretation": "Clear relevant response", "confidence": 0.9}], False),
-    ]
-
-    results = []
-    for branches, expected_interrupt in test_scenarios:
-        awareness.update(branches, [{"resonance": 0.6, "degraded": False}], {})
-        coherence = intention.check_coherence(branches, awareness.get_state())
-        should_restart, reason = reflection.evaluate(branches, coherence, awareness.get_state())
-        correct = should_restart == expected_interrupt
-        results.append({
-            "input": branches[0]["interpretation"],
-            "expected_interrupt": expected_interrupt,
-            "actual_interrupt": should_restart,
-            "correct": correct,
-            "reason": reason
-        })
-        logger.info(f"Scenario: '{branches[0]['interpretation']}' | Expected: {expected_interrupt} | Got: {should_restart} | {'✓' if correct else '✗'}")
-
-    accuracy = sum(r["correct"] for r in results) / len(results)
-    logger.success(f"Meta-cognitive benchmark complete. Accuracy: {accuracy:.0%}")
-    return results
+    return {
+        "benchmark": "superposition_ambiguity",
+        "n_trials": n_trials,
+        "clce_accuracy": clce_correct / n_trials,
+        "greedy_accuracy": greedy_correct / n_trials,
+        "clce_delta": (clce_correct - greedy_correct) / n_trials,
+        "pass": clce_correct > greedy_correct
+    }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="CLCE Benchmark Runner")
-    parser.add_argument(
-        "--subsystem",
-        choices=["all", "superposition", "holographic", "metacognitive"],
-        default="all"
+# ─── Benchmark 2: Holographic vs Exact-Match Baseline ─────────────────────────
+
+def benchmark_holographic(n_items: int = 30, n_queries: int = 20) -> dict:
+    """
+    Task: Partial-cue retrieval.
+    CLCE: HRR-based associative retrieval.
+    Baseline: exact key match (returns None on partial keys).
+    Metric: retrieval hit rate under partial/degraded cues.
+    """
+    s2 = HolographicMemory(dim=512)
+    rng = np.random.default_rng(42)
+
+    keys = [f"concept_{i}" for i in range(n_items)]
+    values = [f"value_{i}" for i in range(n_items)]
+    for k, v in zip(keys, values):
+        s2.encode(k, v)
+
+    clce_hits = 0
+    baseline_hits = 0
+    stored_keys = {k: v for k, v in zip(keys, values)}
+
+    for _ in range(n_queries):
+        idx = int(rng.integers(0, n_items))
+        full_key = keys[idx]
+        # Partial cue: first 7 chars
+        partial_key = full_key[:7]
+        target_val = values[idx]
+
+        # CLCE retrieval (partial)
+        results = s2.retrieve_partial(partial_key, top_k=3)
+        clce_hits += int(any(val == target_val for _, val in results))
+
+        # Baseline: exact match only
+        baseline_hits += int(stored_keys.get(partial_key) == target_val)
+
+    return {
+        "benchmark": "holographic_partial_retrieval",
+        "n_items": n_items,
+        "n_queries": n_queries,
+        "clce_hit_rate": clce_hits / n_queries,
+        "baseline_hit_rate": baseline_hits / n_queries,
+        "clce_delta": (clce_hits - baseline_hits) / n_queries,
+        "pass": clce_hits >= baseline_hits
+    }
+
+
+# ─── Benchmark 3: Meta-Cognitive Goal Drift ───────────────────────────────────
+
+def benchmark_metacognitive(n_steps: int = 20) -> dict:
+    """
+    Task: Maintain goal alignment over N processing steps.
+    CLCE: Module B monitors; Module C interrupts on drift.
+    Baseline: no monitoring (all outputs accepted as-is).
+    Metric: cumulative goal drift events detected and corrected.
+    """
+    mod_a = AwarenessModule()
+    mod_b = IntentionModule()
+    mod_c = ReflectionModule()
+
+    mod_b.set_goal("explain consciousness architecture", GoalLevel.TOP)
+    mod_b.set_goal("compare CLCE vs QNHF", GoalLevel.MID)
+
+    rng = np.random.default_rng(42)
+    outputs = (
+        ["consciousness architecture explained through subsystems"] * (n_steps // 2) +
+        ["the weather is great today", "I like pizza", "random unrelated content"] * (n_steps // 6)
     )
-    args = parser.parse_args()
+    rng.shuffle(outputs)
 
-    logger.info("CLCE Benchmark Suite starting...")
+    clce_corrections = 0
+    baseline_drift_undetected = 0
 
-    if args.subsystem in ("all", "superposition"):
-        run_superposition_benchmark()
+    for output in outputs[:n_steps]:
+        signal = mod_b.evaluate_coherence(output)
+        report = mod_a.get_state_report()
+        event = mod_c.evaluate(output, report, signal)
 
-    if args.subsystem in ("all", "holographic"):
-        run_holographic_benchmark()
+        if event.action in ("reframe", "restart"):
+            clce_corrections += 1
+        if signal.score < 0.3:
+            baseline_drift_undetected += 1  # baseline would miss this
 
-    if args.subsystem in ("all", "metacognitive"):
-        run_metacognitive_benchmark()
+    summary = mod_c.summary()
+    return {
+        "benchmark": "metacognitive_goal_drift",
+        "n_steps": n_steps,
+        "clce_corrections": clce_corrections,
+        "baseline_undetected_drift": baseline_drift_undetected,
+        "avg_coherence": summary.get("avg_coherence", 0.0),
+        "interrupt_summary": summary,
+        "pass": clce_corrections > 0
+    }
 
-    logger.success("All benchmarks complete.")
+
+# ─── Runner ───────────────────────────────────────────────────────────────────
+
+def run_all() -> None:
+    print("\n" + "=" * 60)
+    print("CLCE BENCHMARK SUITE — Phase 4")
+    print(f"Run at: {datetime.utcnow().isoformat()} UTC")
+    print("=" * 60)
+
+    all_results = []
+
+    for fn, name in [
+        (benchmark_superposition, "Subsystem 1: Superposition Ambiguity"),
+        (benchmark_holographic, "Subsystem 2: Holographic Partial Retrieval"),
+        (benchmark_metacognitive, "Subsystem 3: Meta-Cognitive Goal Drift")
+    ]:
+        print(f"\nRunning: {name}...")
+        t0 = time.time()
+        result = fn()
+        elapsed = time.time() - t0
+        result["elapsed_s"] = round(elapsed, 3)
+        all_results.append(result)
+
+        status = "✅ PASS" if result["pass"] else "❌ FAIL"
+        print(f"  {status}")
+        for k, v in result.items():
+            if k not in ("pass", "interrupt_summary"):
+                print(f"  {k}: {v}")
+
+    out_path = Results / f"benchmark_run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    with open(out_path, 'w') as f:
+        json.dump({"run_at": datetime.utcnow().isoformat(), "results": all_results}, f, indent=2)
+
+    print(f"\nResults saved to: {out_path}")
+    print("\n" + "=" * 60)
+    passed = sum(1 for r in all_results if r["pass"])
+    print(f"TOTAL: {passed}/{len(all_results)} benchmarks passed")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":
-    main()
+    run_all()

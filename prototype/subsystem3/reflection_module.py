@@ -1,88 +1,109 @@
-"""Subsystem 3, Module C: Self-Reflection.
+"""
+Subsystem 3, Module C: Self-Reflection
+QTTC excitation type: Self-reflection
 
-The system's interrupt mechanism.
-Can pause Subsystems 1 and 2, query Modules A and B,
-and issue restart instructions with logged reasons.
-
-QTTC excitation type: Self-reflection.
+The system's interrupt mechanism. Can pause processing, query state,
+and issue restart-with-different-framing instructions.
+Logs every interruption for post-hoc audit.
 """
 
-from typing import Dict, Any, List, Tuple
-from collections import deque
-from loguru import logger
-from config import MetaCognitiveConfig
-from subsystem3.awareness_module import AwarenessModule
-from subsystem3.intention_module import IntentionModule
+from dataclasses import dataclass, field
+from typing import List, Optional, Callable, Any
+from datetime import datetime
 
 
-class ReflectionEvent:
-    def __init__(self, reason: str, action: str, awareness_snapshot: Dict, coherence_score: float):
-        self.reason = reason
-        self.action = action
-        self.awareness_snapshot = awareness_snapshot
-        self.coherence_score = coherence_score
-
-    def __repr__(self):
-        return f"ReflectionEvent(reason='{self.reason}', action='{self.action}', coherence={self.coherence_score:.2f})"
+@dataclass
+class InterruptEvent:
+    trigger: str  # What caused the interrupt
+    belief_state_snapshot: dict
+    goal_coherence_score: float
+    action: str  # 'continue' | 'restart' | 'reframe'
+    reframe_instruction: Optional[str]
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 class ReflectionModule:
-    def __init__(
-        self,
-        config: MetaCognitiveConfig,
-        awareness: AwarenessModule,
-        intention: IntentionModule
-    ):
-        self.config = config
-        self.awareness = awareness
-        self.intention = intention
-        self._reflection_log: deque = deque(maxlen=config.reflection_log_size)
-        logger.info("ReflectionModule initialized")
+    """
+    Module C — the internal witness and interrupt.
+    Pauses processing, queries Modules A and B, decides: continue, restart, or reframe.
+
+    Falsifiability condition:
+        Systems with Module C must show statistically fewer goal-drift
+        events and self-contradictions than chain-of-thought baselines.
+    """
+
+    INTERRUPT_THRESHOLD = 0.4  # coherence below this triggers interrupt
+    RESTART_THRESHOLD = 0.2    # coherence below this triggers full restart
+
+    def __init__(self):
+        self.interrupt_log: List[InterruptEvent] = []
+        self._paused: bool = False
 
     def evaluate(
         self,
-        branches: List[Dict],
-        coherence_signal: Dict[str, Any],
-        awareness_state: Dict[str, Any]
-    ) -> Tuple[bool, str]:
+        current_output: str,
+        awareness_report: dict,
+        coherence_signal,
+    ) -> InterruptEvent:
         """
-        Evaluate whether to interrupt processing.
-        Returns (should_restart: bool, reason: str).
+        Core evaluation loop. Called after each processing step.
+        Returns an InterruptEvent describing the action taken.
         """
-        if not self.config.interrupt_enabled:
-            return False, ""
+        score = coherence_signal.score
+        uncertainty_count = awareness_report.get("uncertainty_count", 0)
 
-        reasons_to_interrupt = []
+        if score >= self.INTERRUPT_THRESHOLD and uncertainty_count < 3:
+            action = "continue"
+            reframe = None
+        elif score < self.RESTART_THRESHOLD or uncertainty_count >= 5:
+            action = "restart"
+            reframe = self._generate_reframe(coherence_signal, awareness_report)
+        else:
+            action = "reframe"
+            reframe = self._generate_reframe(coherence_signal, awareness_report)
 
-        # Check 1: Goal drift
-        if coherence_signal.get("status") == "drifting":
-            reasons_to_interrupt.append("goal_drift_detected")
+        event = InterruptEvent(
+            trigger=f"coherence={score:.2f}, uncertainty={uncertainty_count}",
+            belief_state_snapshot=awareness_report,
+            goal_coherence_score=score,
+            action=action,
+            reframe_instruction=reframe
+        )
+        self.interrupt_log.append(event)
+        return event
 
-        # Check 2: All branches have low confidence
-        if all(b["confidence"] < 0.35 for b in branches):
-            reasons_to_interrupt.append("all_branches_low_confidence")
+    def _generate_reframe(self, coherence_signal, awareness_report: dict) -> str:
+        parts = []
+        if coherence_signal.drifting_goals:
+            parts.append(f"Realign with: {', '.join(coherence_signal.drifting_goals)}")
+        unknowns = awareness_report.get("uncertainty_flags", [])
+        if unknowns:
+            parts.append(f"Resolve unknowns first: {', '.join(unknowns[:3])}")
+        recent = awareness_report.get("recent_revisions", [])
+        if recent:
+            parts.append(f"Note recent belief change: {recent[-1].get('new', '')}")
+        return " | ".join(parts) if parts else "Restart with broader framing."
 
-        # Check 3: Self-contradiction in belief update log
-        recent_updates = awareness_state.get("recent_updates", [])
-        if self.config.restart_on_contradiction and len(recent_updates) >= 2:
-            last_two = recent_updates[-2:]
-            if last_two[0]["to"] == last_two[1]["from"] and last_two[1]["to"] == last_two[0]["from"]:
-                reasons_to_interrupt.append("belief_oscillation_detected")
+    def get_audit_log(self) -> List[dict]:
+        return [
+            {
+                "timestamp": e.timestamp,
+                "trigger": e.trigger,
+                "action": e.action,
+                "coherence": e.goal_coherence_score,
+                "reframe": e.reframe_instruction
+            }
+            for e in self.interrupt_log
+        ]
 
-        if reasons_to_interrupt:
-            reason_str = " | ".join(reasons_to_interrupt)
-            event = ReflectionEvent(
-                reason=reason_str,
-                action="restart",
-                awareness_snapshot=awareness_state,
-                coherence_score=coherence_signal.get("score", 0.0)
-            )
-            self._reflection_log.append(event)
-            logger.warning(f"Reflection interrupt triggered: {reason_str}")
-            return True, reason_str
-
-        return False, ""
-
-    def get_recent_events(self, n: int = 5) -> List[str]:
-        """Return the N most recent reflection events as strings."""
-        return [repr(e) for e in list(self._reflection_log)[-n:]]
+    def summary(self) -> dict:
+        total = len(self.interrupt_log)
+        if total == 0:
+            return {"total_interrupts": 0, "continues": 0, "reframes": 0, "restarts": 0}
+        return {
+            "total_interrupts": total,
+            "continues": sum(1 for e in self.interrupt_log if e.action == "continue"),
+            "reframes": sum(1 for e in self.interrupt_log if e.action == "reframe"),
+            "restarts": sum(1 for e in self.interrupt_log if e.action == "restart"),
+            "avg_coherence": sum(e.goal_coherence_score for e in self.interrupt_log) / total
+        }
