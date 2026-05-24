@@ -1,0 +1,63 @@
+Cross-Layer Consciousness Engine (CLCE)
+Copyright (c) 2025-2026 Haley Ann Bird
+All rights reserved.
+
+===============================================================================
+AUTHORSHIP AND ORIGIN DECLARATION
+===============================================================================
+
+Author:     Haley Ann Bird
+Origin:     United States
+First Work: 2025 (conceptual framework)
+First Code: 2026 (prototype implementation)
+
+This repository and all its contents were independently conceived, designed,
+and authored by Haley Ann Bird. No portion of this work was derived from,
+copied from, or co-authored with any third-party commercial or institutional
+entity without explicit written attribution.
+
+===============================================================================
+SECONDARY WORKS AND ATTRIBUTIONS
+===============================================================================
+
+This work references, analyzes, and critiques the following published works
+for research purposes under fair use / fair dealing:
+
+  1. Quantum Neural Holographic Fusion (QNHF) — published on SSRN 2025.
+     Referenced for comparative academic analysis only. CLCE is an
+     independent, original architecture. No QNHF source code was used.
+
+  2. Holographic Reduced Representations — Plate, T.A. (1995).
+     IEEE Transactions on Neural Networks. Used as algorithmic inspiration;
+     no code copied.
+
+  3. Hyperdimensional Computing — Kanerva, P. (2009).
+     Cognitive Computation. Referenced as prior art.
+
+  4. Orchestrated Objective Reduction (Orch-OR) — Penrose & Hameroff (1994+).
+     Referenced for theoretical comparison only.
+
+  5. Universal Consciousness Field — Strømme, M. (2025). AIP Advances.
+     Referenced for theoretical comparison only.
+
+  6. all-MiniLM-L6-v2 — sentence-transformers library.
+     Apache 2.0 License. Optional dependency; not bundled.
+
+===============================================================================
+TIMESTAMP CHAIN
+===============================================================================
+
+The following Git commit SHAs establish the public, cryptographically
+verifiable authorship timeline of this work:
+
+  Phase 1-3 commits  : see git log (pre-2026-05-24)
+  Phase 4 commit 1   : 724b8d3d0bc4c236ba2563c0a13713c131bf6cb0
+  Phase 4 commit 2   : ed96bd0000ca14ae03a8131c0414b332e48dd5a7
+
+Git commits are SHA-256 content-addressed and cannot be forged retroactively
+without rewriting the repository history (detectable via GitHub's audit log).
+
+Additional timestamp records exist on:
+  - Notion workspace (Haley Ann Bird, private)
+  - SSRN preprint (pending submission)
+  - arXiv (planned, Phase 7)
