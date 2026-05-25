@@ -1,0 +1,106 @@
+name: IP Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  copyright-headers:
+    name: Copyright Header Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Python files for copyright header
+        run: |
+          echo "Checking copyright headers in Python files..."
+          MISSING=0
+          for f in $(find prototype/ -name '*.py' ! -name '__init__.py'); do
+            if ! head -5 "$f" | grep -q 'Copyright.*Haley Ann Bird'; then
+              echo "MISSING copyright header: $f"
+              MISSING=$((MISSING+1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "$MISSING file(s) missing copyright header."
+            exit 1
+          fi
+          echo "All Python files have copyright headers."
+
+  license-scan:
+    name: Dependency License Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-licenses
+        run: pip install pip-licenses numpy scipy
+
+      - name: Scan dependency licenses
+        run: |
+          echo "Scanning dependency licenses..."
+          pip-licenses --order=license --format=markdown
+          # Fail if any GPL or AGPL dependency is introduced
+          if pip-licenses --order=license | grep -iE 'GPL|AGPL'; then
+            echo "ERROR: Copyleft (GPL/AGPL) dependency detected."
+            echo "CLCE is CC BY-NC-ND. GPL dependencies are incompatible."
+            exit 1
+          fi
+          echo "No copyleft dependencies found."
+
+  ip-file-integrity:
+    name: IP File Integrity Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required IP files exist
+        run: |
+          REQUIRED_FILES=(
+            "LICENSE"
+            "NOTICE"
+            "IP_DECLARATION.md"
+            "PRIOR_ART_REGISTRY.md"
+            "PATENT_CLAIMS_SCAFFOLD.md"
+            "COMMERCIAL_LICENSE.md"
+            "CONTRIBUTING.md"
+            "DCO.md"
+            "SECURITY.md"
+            "CODEOWNERS"
+            "CHANGELOG.md"
+          )
+          MISSING=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING required IP file: $f"
+              MISSING=$((MISSING+1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "$MISSING required IP file(s) missing from repository."
+            exit 1
+          fi
+          echo "All required IP files present."
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: HEAD~1
+          head: HEAD
+          extra_args: --only-verified

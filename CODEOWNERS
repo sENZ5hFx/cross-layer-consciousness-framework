@@ -1,0 +1,28 @@
+# CODEOWNERS
+# All IP-critical files require review by @sENZ5hFx before merge.
+# This file enforces owner review on any PR touching these files.
+
+# Global default: all files require owner review
+* @sENZ5hFx
+
+# IP files: explicit owner lock
+LICENSE @sENZ5hFx
+NOTICE @sENZ5hFx
+IP_DECLARATION.md @sENZ5hFx
+PRIOR_ART_REGISTRY.md @sENZ5hFx
+PATENT_CLAIMS_SCAFFOLD.md @sENZ5hFx
+COMMERCIAL_LICENSE.md @sENZ5hFx
+LICENSING_FAQ.md @sENZ5hFx
+TRADEMARK_WATCH_REGISTER.md @sENZ5hFx
+CHANGELOG.md @sENZ5hFx
+CONTRIBUTING.md @sENZ5hFx
+DCO.md @sENZ5hFx
+SECURITY.md @sENZ5hFx
+
+# Architecture and design docs
+architecture/ @sENZ5hFx
+testability/ @sENZ5hFx
+ip_xref/ @sENZ5hFx
+
+# CI/CD workflows
+.github/ @sENZ5hFx
