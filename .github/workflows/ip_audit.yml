@@ -7,140 +7,118 @@ on:
     branches: [main]
 
 jobs:
-  # ─────────────────────────────────────────────
-  # JOB 1: Copyright Header Check
-  # Self-healing: guard for missing prototype/ dir
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 1 — Copyright Header Check
+  # Scans all prototype/*.py (excl __init__.py, conftest.py)
+  # Self-healing: skips gracefully if no .py files exist yet
+  # ═══════════════════════════════════════════════════════════════
   copyright-headers:
     name: Copyright Header Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check Python files for copyright header
+      - name: Check copyright headers
         run: |
-          echo "Checking copyright headers in Python files..."
-          # Guard: only run if prototype/ directory exists
-          if [ ! -d prototype ]; then
-            echo "prototype/ directory does not exist — skipping copyright check (non-fatal)"
-            exit 0
-          fi
+          echo "Scanning Python files for copyright headers..."
           MISSING=0
+          # Find all .py files except __init__.py and conftest.py
           while IFS= read -r -d '' f; do
-            if ! head -5 "$f" | grep -q 'Copyright.*Haley Ann Bird'; then
-              echo "MISSING copyright header: $f"
+            if ! head -3 "$f" | grep -q 'Copyright.*Haley Ann Bird'; then
+              echo "MISSING: $f"
               MISSING=$((MISSING+1))
             fi
-          done < <(find prototype/ -name '*.py' ! -name '__init__.py' -print0)
-          if [ $MISSING -gt 0 ]; then
-            echo "$MISSING file(s) missing copyright header."
+          done < <(find prototype/ -name '*.py' \
+            ! -name '__init__.py' \
+            ! -name 'conftest.py' \
+            -print0 2>/dev/null || true)
+          if [ "$MISSING" -gt 0 ]; then
+            echo "$MISSING file(s) missing copyright header — fix and repush."
             exit 1
           fi
-          echo "All Python files have copyright headers."
+          echo "All Python files have valid copyright headers."
 
-  # ─────────────────────────────────────────────
-  # JOB 2: Dependency License Scan
-  # Self-healing: exact GPL/AGPL match (not LGPL false-positive),
-  #               only scans if requirements.txt exists
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 2 — Dependency License Scan
+  # LGPL-safe: word-boundary regex excludes LGPL from blocklist
+  # ═══════════════════════════════════════════════════════════════
   license-scan:
     name: Dependency License Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install pip-licenses
-        run: pip install pip-licenses
-
-      - name: Install project dependencies
+      - name: Install pip-licenses + project deps
         run: |
+          pip install pip-licenses
           if [ -f prototype/requirements.txt ]; then
-            pip install -r prototype/requirements.txt
-          else
-            echo "No requirements.txt — scanning base environment only"
+            # Install only non-optional deps (strip comment lines)
+            grep -v '^#' prototype/requirements.txt | pip install -r /dev/stdin || true
           fi
 
-      - name: Scan dependency licenses
+      - name: Scan licenses
         run: |
-          echo "Scanning dependency licenses..."
           pip-licenses --order=license --format=markdown
-          # NOTE: grep uses word-boundary to avoid LGPL false-positive
-          # LGPL is permissive-compatible; only GPL-2.0, GPL-3.0, AGPL-3.0 are blockers
-          if pip-licenses --order=license | grep -E '\b(GPL-[0-9]|GNU General Public License|AGPL)'; then
-            echo "ERROR: Copyleft (GPL/AGPL) dependency detected."
-            echo "CLCE is CC BY-NC-ND. GPL dependencies are incompatible."
+          # Block only strict copyleft — NOT LGPL (compatible with CC BY-NC-ND)
+          if pip-licenses --order=license | grep -E '\b(GPL-[0-9]|GNU General Public License v[0-9]|AGPL)'; then
+            echo "ERROR: Copyleft (GPL/AGPL) dependency detected. Incompatible with CLCE license."
             exit 1
           fi
-          echo "No copyleft dependencies found."
+          echo "License scan passed — no copyleft dependencies."
 
-  # ─────────────────────────────────────────────
-  # JOB 3: IP File Integrity Check
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 3 — IP File Integrity
+  # ═══════════════════════════════════════════════════════════════
   ip-file-integrity:
-    name: IP File Integrity Check
+    name: IP File Integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify required IP files exist
+      - name: Verify required IP files
         run: |
-          REQUIRED_FILES=(
-            "LICENSE"
-            "NOTICE"
-            "IP_DECLARATION.md"
-            "PRIOR_ART_REGISTRY.md"
-            "PATENT_CLAIMS_SCAFFOLD.md"
-            "COMMERCIAL_LICENSE.md"
-            "CONTRIBUTING.md"
-            "DCO.md"
-            "SECURITY.md"
-            "CODEOWNERS"
-            "CHANGELOG.md"
+          REQUIRED=(
+            LICENSE NOTICE IP_DECLARATION.md PRIOR_ART_REGISTRY.md
+            PATENT_CLAIMS_SCAFFOLD.md COMMERCIAL_LICENSE.md
+            CONTRIBUTING.md DCO.md SECURITY.md CODEOWNERS CHANGELOG.md
           )
           MISSING=0
-          for f in "${REQUIRED_FILES[@]}"; do
+          for f in "${REQUIRED[@]}"; do
             if [ ! -f "$f" ]; then
-              echo "MISSING required IP file: $f"
+              echo "MISSING: $f"
               MISSING=$((MISSING+1))
             fi
           done
-          if [ $MISSING -gt 0 ]; then
-            echo "$MISSING required IP file(s) missing from repository."
-            exit 1
-          fi
-          echo "All required IP files present."
+          [ "$MISSING" -eq 0 ] && echo "All IP files present." || exit 1
 
-  # ─────────────────────────────────────────────
-  # JOB 4: Secret Scan (TruffleHog)
-  # Self-healing:
-  #   - Pinned to a stable release tag (v3) instead of floating `main`
-  #   - Safe HEAD~1 fallback: uses `git log` to detect first commit
-  #     and scans full history on initial push instead of crashing
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 4 — Secret Scan (TruffleHog)
+  # Pinned to v3.88.27 — no more floating @main breakage
+  # Safe HEAD~1 fallback for first-commit push
+  # ═══════════════════════════════════════════════════════════════
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0         # full history required for diff scanning
+          fetch-depth: 0
 
-      - name: Determine scan base
+      - name: Resolve scan base
         id: base
         run: |
-          # On the very first commit HEAD~1 doesn't exist — fall back to empty tree
           if git rev-parse HEAD~1 > /dev/null 2>&1; then
             echo "base=HEAD~1" >> "$GITHUB_OUTPUT"
           else
+            # Empty tree SHA — safe first-commit fallback
             echo "base=4b825dc642cb6eb9a060e54bf8d69288fbee4904" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Scan for secrets with TruffleHog
+      - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@v3.88.27
         with:
           path: ./

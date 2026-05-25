@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Haley Ann Bird. All rights reserved.
+# CLCE — Cross-Layer Consciousness Engine
 """
 CLCE Full-Stack Orchestrator
 Wires Subsystem 1, 2, and 3 into a single coherent processing loop.
@@ -45,7 +47,7 @@ class CLCEOrchestrator:
     End-to-end CLCE processing loop.
 
     Processing contract:
-        1. Generate N candidate interpretations of the input (currently: rule-based; swap for LLM in Phase 5)
+        1. Generate N candidate interpretations of the input
         2. Embed input into context vector
         3. S1 collapses superposition → selected interpretation
         4. S2 retrieves relevant memories; encodes new output
@@ -70,7 +72,6 @@ class CLCEOrchestrator:
         self.mod_c = ReflectionModule()
         self.embedding_dim = embedding_dim
 
-        # Seed top-level goals
         for goal in (top_goals or ["answer accurately", "maintain coherence", "stay goal-aligned"]):
             self.mod_b.set_goal(goal, GoalLevel.TOP)
 
@@ -97,65 +98,32 @@ class CLCEOrchestrator:
         result.meta["goal_hierarchy"] = self.mod_b.get_goal_hierarchy()
         return result
 
-    def _single_pass(
-        self,
-        user_input: str,
-        extra_context: Optional[str],
-        reframe_prefix: str,
-        iteration: int
-    ) -> ProcessingResult:
+    def _single_pass(self, user_input, extra_context, reframe_prefix, iteration):
         full_input = reframe_prefix + user_input
-
-        # Step 1: Generate candidate interpretations
         candidates = self._generate_candidates(full_input)
-
-        # Step 2: Embed into context vector
         ctx_vec = embed(full_input, dim=self.embedding_dim)
-
-        # Step 3: S1 collapse
         self.s1.load(candidates)
         collapse = self.s1.observe(context_vector=ctx_vec)
         selected = collapse.selected.text
         confidence = collapse.confidence
-
-        # Step 4: S2 memory
         memory_hits = self.s2.retrieve(selected, top_k=3)
         self.s2.encode(selected, full_input, strength=confidence)
         self.mod_a.update_memory(selected)
-
-        # Step 5: Awareness + Intention
         self.mod_a.update_belief(selected, confidence, source="subsystem1")
         report = self.mod_a.get_state_report()
         signal = self.mod_b.evaluate_coherence(selected)
-
-        # Step 6: Reflection
         event = self.mod_c.evaluate(selected, report, signal)
-
-        # Construct output
         output = self._synthesize_output(selected, memory_hits, signal, event)
-
         return ProcessingResult(
-            input=full_input,
-            output=output,
-            selected_interpretation=selected,
-            confidence=confidence,
-            coherence_score=signal.score,
-            reflection_action=event.action,
+            input=full_input, output=output,
+            selected_interpretation=selected, confidence=confidence,
+            coherence_score=signal.score, reflection_action=event.action,
             reframe_instruction=event.reframe_instruction,
-            memory_hits=memory_hits,
-            elapsed_s=0.0,
+            memory_hits=memory_hits, elapsed_s=0.0,
         )
 
-    def _generate_candidates(
-        self, text: str, n: int = 5
-    ) -> list:
-        """
-        Generate N candidate interpretations.
-        Phase 4: deterministic paraphrase rules.
-        Phase 5: swap for LLM-generated diverse interpretations.
-        """
-        base_weight = 1.0
-        candidates = [(text, base_weight)]
+    def _generate_candidates(self, text: str, n: int = 5) -> list:
+        candidates = [(text, 1.0)]
         modifiers = [
             (f"[literal] {text}", 0.8),
             (f"[abstract] {text}", 0.7),
@@ -164,9 +132,7 @@ class CLCEOrchestrator:
         ]
         return candidates + modifiers[:n - 1]
 
-    def _synthesize_output(
-        self, selected: str, memory_hits: list, signal, event
-    ) -> str:
+    def _synthesize_output(self, selected, memory_hits, signal, event) -> str:
         parts = [f"Selected interpretation: {selected}"]
         if memory_hits:
             top_hit = memory_hits[0]

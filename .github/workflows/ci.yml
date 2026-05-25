@@ -7,24 +7,27 @@ on:
     branches: [ main ]
 
 jobs:
-  # ─────────────────────────────────────────────
-  # JOB 1: Unit Tests (matrix: 3.10 / 3.11 / 3.12)
-  # Self-healing: pip cache, missing requirements guard,
-  #               missing tests dir guard, coverage optional
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 1 — Unit Tests
+  # Runs ALL test_*.py files discovered in prototype/tests/
+  # Self-healing guarantees:
+  #   ✓ pip cache (keyed on requirements.txt hash)
+  #   ✓ conftest.py ensures sys.path is set — no ImportError
+  #   ✓ fail-fast: false — 3.12 still runs if 3.10 fails
+  #   ✓ coverage upload is non-fatal (if-no-files-found: ignore)
+  # ═══════════════════════════════════════════════════════════════
   test:
-    name: Unit Tests (Python ${{ matrix.python-version }})
+    name: Tests · Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false          # don't cancel siblings on one version failure
+      fail-fast: false
       matrix:
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -38,47 +41,37 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Guard: only install requirements.txt if it exists
-          if [ -f prototype/requirements.txt ]; then
-            pip install -r prototype/requirements.txt
-          else
-            echo "No requirements.txt found — skipping project deps"
-          fi
-          pip install pytest pytest-cov
+          pip install -r prototype/requirements.txt
 
-      - name: Run unit tests with coverage
+      - name: Run all tests
         working-directory: prototype
-        # Guard: only run tests if the test file exists
         run: |
-          if [ -f tests/test_subsystems.py ]; then
-            pytest tests/test_subsystems.py -v --cov=. --cov-report=xml --cov-report=term-missing
-          else
-            echo "No test_subsystems.py found — skipping test run (non-fatal)"
-          fi
+          # Discovers ALL test_*.py under tests/ automatically
+          pytest tests/ -v --tb=short \
+            --cov=. --cov-report=xml --cov-report=term-missing
 
-      - name: Upload coverage report
-        if: always()            # upload even if tests failed, for debugging
+      - name: Upload coverage
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-py${{ matrix.python-version }}
           path: prototype/coverage.xml
-          if-no-files-found: ignore   # non-fatal if coverage.xml wasn't produced
+          if-no-files-found: ignore
 
-  # ─────────────────────────────────────────────
-  # JOB 2: Benchmark Suite
-  # Self-healing: guard for missing benchmark script/results dir
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 2 — Benchmarks
+  # advisory (continue-on-error: true — never blocks merges)
+  # ═══════════════════════════════════════════════════════════════
   benchmarks:
-    name: Benchmark Suite
+    name: Benchmarks
     runs-on: ubuntu-latest
     needs: test
-    continue-on-error: true     # benchmarks are advisory; never block merges
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -92,20 +85,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f prototype/requirements.txt ]; then
-            pip install -r prototype/requirements.txt
-          fi
+          pip install -r prototype/requirements.txt
 
       - name: Run benchmarks
-        run: |
-          if [ -f benchmarks/run_benchmarks.py ]; then
-            python benchmarks/run_benchmarks.py
-          else
-            echo "benchmarks/run_benchmarks.py not found — skipping (non-fatal)"
-          fi
-
-      - name: Ensure benchmark results dir exists
-        run: mkdir -p benchmarks/results
+        run: python benchmarks/run_benchmarks.py
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
@@ -114,10 +97,9 @@ jobs:
           path: benchmarks/results/
           if-no-files-found: ignore
 
-  # ─────────────────────────────────────────────
-  # JOB 3: Lint (ruff)
-  # Self-healing: only lint if prototype/ or benchmarks/ exist
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 3 — Lint (ruff)
+  # ═══════════════════════════════════════════════════════════════
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -125,8 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -134,12 +115,4 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff
-        run: |
-          TARGETS=""
-          [ -d prototype ] && TARGETS="$TARGETS prototype/"
-          [ -d benchmarks ] && TARGETS="$TARGETS benchmarks/"
-          if [ -n "$TARGETS" ]; then
-            ruff check $TARGETS --ignore E501,E402
-          else
-            echo "No lintable directories found — skipping ruff (non-fatal)"
-          fi
+        run: ruff check prototype/ benchmarks/ --ignore E501,E402
