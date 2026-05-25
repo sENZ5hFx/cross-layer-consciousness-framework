@@ -7,6 +7,10 @@ on:
     branches: [main]
 
 jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Copyright Header Check
+  # Self-healing: guard for missing prototype/ dir
+  # ─────────────────────────────────────────────
   copyright-headers:
     name: Copyright Header Check
     runs-on: ubuntu-latest
@@ -16,45 +20,67 @@ jobs:
       - name: Check Python files for copyright header
         run: |
           echo "Checking copyright headers in Python files..."
+          # Guard: only run if prototype/ directory exists
+          if [ ! -d prototype ]; then
+            echo "prototype/ directory does not exist — skipping copyright check (non-fatal)"
+            exit 0
+          fi
           MISSING=0
-          for f in $(find prototype/ -name '*.py' ! -name '__init__.py'); do
+          while IFS= read -r -d '' f; do
             if ! head -5 "$f" | grep -q 'Copyright.*Haley Ann Bird'; then
               echo "MISSING copyright header: $f"
               MISSING=$((MISSING+1))
             fi
-          done
+          done < <(find prototype/ -name '*.py' ! -name '__init__.py' -print0)
           if [ $MISSING -gt 0 ]; then
             echo "$MISSING file(s) missing copyright header."
             exit 1
           fi
           echo "All Python files have copyright headers."
 
+  # ─────────────────────────────────────────────
+  # JOB 2: Dependency License Scan
+  # Self-healing: exact GPL/AGPL match (not LGPL false-positive),
+  #               only scans if requirements.txt exists
+  # ─────────────────────────────────────────────
   license-scan:
     name: Dependency License Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install pip-licenses
-        run: pip install pip-licenses numpy scipy
+        run: pip install pip-licenses
+
+      - name: Install project dependencies
+        run: |
+          if [ -f prototype/requirements.txt ]; then
+            pip install -r prototype/requirements.txt
+          else
+            echo "No requirements.txt — scanning base environment only"
+          fi
 
       - name: Scan dependency licenses
         run: |
           echo "Scanning dependency licenses..."
           pip-licenses --order=license --format=markdown
-          # Fail if any GPL or AGPL dependency is introduced
-          if pip-licenses --order=license | grep -iE 'GPL|AGPL'; then
+          # NOTE: grep uses word-boundary to avoid LGPL false-positive
+          # LGPL is permissive-compatible; only GPL-2.0, GPL-3.0, AGPL-3.0 are blockers
+          if pip-licenses --order=license | grep -E '\b(GPL-[0-9]|GNU General Public License|AGPL)'; then
             echo "ERROR: Copyleft (GPL/AGPL) dependency detected."
             echo "CLCE is CC BY-NC-ND. GPL dependencies are incompatible."
             exit 1
           fi
           echo "No copyleft dependencies found."
 
+  # ─────────────────────────────────────────────
+  # JOB 3: IP File Integrity Check
+  # ─────────────────────────────────────────────
   ip-file-integrity:
     name: IP File Integrity Check
     runs-on: ubuntu-latest
@@ -89,18 +115,35 @@ jobs:
           fi
           echo "All required IP files present."
 
+  # ─────────────────────────────────────────────
+  # JOB 4: Secret Scan (TruffleHog)
+  # Self-healing:
+  #   - Pinned to a stable release tag (v3) instead of floating `main`
+  #   - Safe HEAD~1 fallback: uses `git log` to detect first commit
+  #     and scans full history on initial push instead of crashing
+  # ─────────────────────────────────────────────
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0         # full history required for diff scanning
 
-      - name: Scan for secrets
-        uses: trufflesecurity/trufflehog@main
+      - name: Determine scan base
+        id: base
+        run: |
+          # On the very first commit HEAD~1 doesn't exist — fall back to empty tree
+          if git rev-parse HEAD~1 > /dev/null 2>&1; then
+            echo "base=HEAD~1" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=4b825dc642cb6eb9a060e54bf8d69288fbee4904" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan for secrets with TruffleHog
+        uses: trufflesecurity/trufflehog@v3.88.27
         with:
           path: ./
-          base: HEAD~1
+          base: ${{ steps.base.outputs.base }}
           head: HEAD
           extra_args: --only-verified
