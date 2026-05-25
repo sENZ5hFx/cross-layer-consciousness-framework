@@ -1,10 +1,9 @@
 # Authors
 
-## Sole Author & Inventor
+| Name | Role | Contact |
+|------|------|---------|
+| Haley Ann Bird | Sole inventor and author | heyhaleybird@gmail.com |
 
-**Haley Ann Bird** (GitHub: @sENZ5hFx, HBird88315)
-- Email: heyhaleybird@gmail.com
-- Location: Fishers, Indiana, USA
-- Contribution: All theoretical framework design, model architecture, implementation, and documentation
+All theoretical frameworks, computational models, and written content in this repository were created solely by Haley Ann Bird.
 
-All rights reserved. Copyright © 2026 Haley Ann Bird.
+Date of original creation: 2026-05-24
