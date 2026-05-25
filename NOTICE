@@ -1,63 +1,66 @@
 Cross-Layer Consciousness Engine (CLCE)
-Copyright (c) 2025-2026 Haley Ann Bird
-All rights reserved.
+Copyright (c) 2026 Haley Ann Bird. All rights reserved.
 
-===============================================================================
-AUTHORSHIP AND ORIGIN DECLARATION
-===============================================================================
+========================================================================
+THIRD-PARTY COMPONENTS
+========================================================================
 
-Author:     Haley Ann Bird
-Origin:     United States
-First Work: 2025 (conceptual framework)
-First Code: 2026 (prototype implementation)
+This software may use the following third-party libraries, each governed
+by its own licence.  The inclusion of a library here does not imply
+endorsement of this project by its authors.
 
-This repository and all its contents were independently conceived, designed,
-and authored by Haley Ann Bird. No portion of this work was derived from,
-copied from, or co-authored with any third-party commercial or institutional
-entity without explicit written attribution.
+------------------------------------------------------------------------
+numpy
+  Licence : BSD 3-Clause
+  Source  : https://numpy.org
+  Use     : All numerical array operations throughout the prototype.
 
-===============================================================================
-SECONDARY WORKS AND ATTRIBUTIONS
-===============================================================================
+pytest
+  Licence : MIT
+  Source  : https://pytest.org
+  Use     : Test runner for all unit and integration tests.
 
-This work references, analyzes, and critiques the following published works
-for research purposes under fair use / fair dealing:
+sentence-transformers (optional)
+  Licence : Apache 2.0
+  Source  : https://www.sbert.net
+  Use     : Real semantic embedding backend (embeddings.py).
+            Not required; pseudo-backend is used when absent.
 
-  1. Quantum Neural Holographic Fusion (QNHF) — published on SSRN 2025.
-     Referenced for comparative academic analysis only. CLCE is an
-     independent, original architecture. No QNHF source code was used.
+torch / PyTorch (optional, transitive via sentence-transformers)
+  Licence : BSD-style (see https://github.com/pytorch/pytorch/blob/main/LICENSE)
+  Source  : https://pytorch.org
+  Use     : Neural network inference for sentence-transformers.
+            Not required in CI.
 
-  2. Holographic Reduced Representations — Plate, T.A. (1995).
-     IEEE Transactions on Neural Networks. Used as algorithmic inspiration;
-     no code copied.
+ruff
+  Licence : MIT
+  Source  : https://github.com/astral-sh/ruff
+  Use     : Lint and format checking in CI.
 
-  3. Hyperdimensional Computing — Kanerva, P. (2009).
-     Cognitive Computation. Referenced as prior art.
+========================================================================
+PROPRIETARY COMPONENTS
+========================================================================
 
-  4. Orchestrated Objective Reduction (Orch-OR) — Penrose & Hameroff (1994+).
-     Referenced for theoretical comparison only.
+All source files bearing the header
+    # Copyright (c) 2026 Haley Ann Bird. All rights reserved.
+are proprietary to Haley Ann Bird and are NOT open-source.  No rights
+are granted except as expressly stated in the LICENSE file.
 
-  5. Universal Consciousness Field — Strømme, M. (2025). AIP Advances.
-     Referenced for theoretical comparison only.
+Proprietary files include but are not limited to:
+  prototype/config.py
+  prototype/embeddings.py
+  prototype/orchestrator.py
+  prototype/main.py
+  prototype/session_cli.py
+  prototype/conftest.py
+  prototype/subsystem1/
+  prototype/subsystem2/
+  prototype/subsystem3/
+  prototype/tests/
 
-  6. all-MiniLM-L6-v2 — sentence-transformers library.
-     Apache 2.0 License. Optional dependency; not bundled.
+========================================================================
+CONTACT
+========================================================================
 
-===============================================================================
-TIMESTAMP CHAIN
-===============================================================================
-
-The following Git commit SHAs establish the public, cryptographically
-verifiable authorship timeline of this work:
-
-  Phase 1-3 commits  : see git log (pre-2026-05-24)
-  Phase 4 commit 1   : 724b8d3d0bc4c236ba2563c0a13713c131bf6cb0
-  Phase 4 commit 2   : ed96bd0000ca14ae03a8131c0414b332e48dd5a7
-
-Git commits are SHA-256 content-addressed and cannot be forged retroactively
-without rewriting the repository history (detectable via GitHub's audit log).
-
-Additional timestamp records exist on:
-  - Notion workspace (Haley Ann Bird, private)
-  - SSRN preprint (pending submission)
-  - arXiv (planned, Phase 7)
+For licensing enquiries: see COMMERCIAL_LICENSE.md or open an issue
+marked [licensing] in this repository.

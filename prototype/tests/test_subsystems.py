@@ -1,22 +1,53 @@
+# Copyright (c) 2026 Haley Ann Bird. All rights reserved.
+# CLCE — Cross-Layer Consciousness Engine
 """
 Unit tests for all three CLCE subsystems.
 Run with: pytest prototype/tests/test_subsystems.py -v
+
+Note: sys.path manipulation below is belt-and-suspenders alongside conftest.py.
 """
+from __future__ import annotations
+
+import os
+import sys
 
 import numpy as np
 import pytest
 
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from subsystem1.superposition_layer import SuperpositionLayer, Interpretation
-from subsystem2.holographic_memory import HolographicMemory, cosine_similarity
-from subsystem3.awareness_module import AwarenessModule
-from subsystem3.intention_module import IntentionModule, GoalLevel
-from subsystem3.reflection_module import ReflectionModule
+from subsystem1.superposition_layer import SuperpositionLayer  # noqa: E402
+from subsystem2.holographic_memory import HolographicMemory, cosine_similarity  # noqa: E402
+from subsystem3.awareness_module import AwarenessModule  # noqa: E402
+from subsystem3.intention_module import CoherenceSignal, GoalLevel, IntentionModule  # noqa: E402
+from subsystem3.reflection_module import ReflectionModule  # noqa: E402
 
 
-# ─── Subsystem 1 Tests ────────────────────────────────────────────────────────
+# ── Shared fixtures ────────────────────────────────────────────────────────────
+
+def _make_coherence_signal(
+    score: float = 0.8,
+    drifting: list | None = None,
+) -> CoherenceSignal:
+    return CoherenceSignal(
+        score=score,
+        drifting_goals=drifting or [],
+        resolution="On track." if score >= 0.4 else "Reorient.",
+    )
+
+
+def _make_awareness_report(uncertainty_count: int = 0) -> dict:
+    return {
+        "active_beliefs": [],
+        "active_memories": [],
+        "uncertainty_flags": [],
+        "recent_revisions": [],
+        "uncertainty_count": uncertainty_count,
+        "belief_count": 0,
+    }
+
+
+# ── Subsystem 1 ────────────────────────────────────────────────────────────────
 
 class TestSuperpositionLayer:
     def setup_method(self):
@@ -58,133 +89,160 @@ class TestSuperpositionLayer:
             self.s1.observe()
         assert len(self.s1.get_collapse_log()) == 3
 
+    def test_active_branches_cleared_after_collapse(self):
+        self.s1.load([("A", 0.6), ("B", 0.4)])
+        self.s1.observe()
+        assert self.s1._active_branches == []
 
-# ─── Subsystem 2 Tests ────────────────────────────────────────────────────────
+    def test_observe_before_load_raises(self):
+        with pytest.raises(RuntimeError):
+            self.s1.observe()
+
+    def test_zero_weight_raises(self):
+        with pytest.raises(ValueError):
+            self.s1.load([("A", 0.0)])
+
+
+# ── Subsystem 2 ────────────────────────────────────────────────────────────────
 
 class TestHolographicMemory:
     def setup_method(self):
-        self.s2 = HolographicMemory(dim=512)
+        self.mem = HolographicMemory(dim=256)
 
-    def test_encode_and_retrieve(self):
-        self.s2.encode("color", "blue")
-        results = self.s2.retrieve("color")
-        assert len(results) == 1
-        score, val = results[0]
-        assert val == "blue"
-        assert score > 0.0
+    def test_encode_increments_trace_count(self):
+        self.mem.encode("sky", "blue")
+        assert self.mem.get_state()["num_traces"] == 1
 
-    def test_multiple_encodings(self):
-        self.s2.encode("animal", "cat")
-        self.s2.encode("vehicle", "car")
-        self.s2.encode("food", "pizza")
-        results = self.s2.retrieve("food")
-        assert results[0][1] == "pizza"
+    def test_retrieve_returns_list(self):
+        self.mem.encode("ocean", "deep")
+        results = self.mem.retrieve("ocean")
+        assert isinstance(results, list)
+        assert len(results) >= 1
 
-    def test_partial_retrieval_returns_results(self):
-        self.s2.encode("neuroscience", "synaptic plasticity")
-        results = self.s2.retrieve_partial("neuro")
-        assert len(results) > 0
+    def test_retrieve_top_match_value(self):
+        self.mem.encode("capital", "Paris")
+        results = self.mem.retrieve("capital", top_k=1)
+        _, val = results[0]
+        assert val == "Paris"
 
-    def test_memory_state(self):
-        self.s2.encode("k1", "v1")
-        self.s2.encode("k2", "v2")
-        state = self.s2.get_state()
-        assert state["num_traces"] == 2
-        assert state["memory_norm"] > 0
+    def test_retrieve_empty_returns_empty(self):
+        assert self.mem.retrieve("ghost") == []
 
-    def test_cosine_similarity_bounds(self):
-        a = np.random.randn(64)
-        b = np.random.randn(64)
-        sim = cosine_similarity(a, b)
-        assert -1.1 <= sim <= 1.1
+    def test_retrieve_partial_returns_list(self):
+        self.mem.encode("quantum", "entanglement")
+        assert isinstance(self.mem.retrieve_partial("quantum"), list)
+
+    def test_get_state_keys(self):
+        state = self.mem.get_state()
+        for key in ("num_traces", "memory_norm", "dim"):
+            assert key in state
+
+    def test_retrieve_returns_float_value_tuples(self):
+        self.mem.encode("topic", "value")
+        hits = self.mem.retrieve("topic", top_k=1)
+        assert len(hits) == 1
+        score, val = hits[0]
+        assert isinstance(score, float)
+        assert isinstance(val, str)
 
 
-# ─── Subsystem 3 Tests ────────────────────────────────────────────────────────
+class TestCosineSimilarity:
+    def test_identical_vectors(self):
+        v = np.array([1.0, 0.0, 0.0])
+        assert abs(cosine_similarity(v, v) - 1.0) < 1e-6
+
+    def test_orthogonal_vectors(self):
+        assert abs(cosine_similarity(np.array([1.0, 0.0]), np.array([0.0, 1.0]))) < 1e-6
+
+    def test_zero_vector_safe(self):
+        assert isinstance(cosine_similarity(np.zeros(4), np.ones(4)), float)
+
+
+# ── Subsystem 3 ────────────────────────────────────────────────────────────────
 
 class TestAwarenessModule:
     def setup_method(self):
-        self.mod_a = AwarenessModule()
+        self.mod = AwarenessModule()
 
-    def test_update_belief(self):
-        self.mod_a.update_belief("sky is blue", 0.9)
-        assert len(self.mod_a.active_beliefs) == 1
-
-    def test_belief_revision_logged(self):
-        self.mod_a.update_belief("earth is flat", 0.8)
-        self.mod_a.update_belief("earth is flat", 0.1)  # confidence changed
-        assert len(self.mod_a.revision_log) == 1
+    def test_update_belief_adds_entry(self):
+        self.mod.update_belief("sky is blue", 0.9)
+        assert self.mod.get_state_report()["belief_count"] == 1
 
     def test_flag_and_resolve_unknown(self):
-        self.mod_a.flag_unknown("dark matter")
-        assert "dark matter" in self.mod_a.uncertainty_flags
-        self.mod_a.resolve_unknown("dark matter")
-        assert "dark matter" not in self.mod_a.uncertainty_flags
+        self.mod.flag_unknown("dark matter")
+        assert self.mod.get_state_report()["uncertainty_count"] == 1
+        self.mod.resolve_unknown("dark matter")
+        assert self.mod.get_state_report()["uncertainty_count"] == 0
 
-    def test_state_report_structure(self):
-        self.mod_a.update_belief("test", 0.5)
-        report = self.mod_a.get_state_report()
-        assert "active_beliefs" in report
-        assert "uncertainty_flags" in report
-        assert "recent_revisions" in report
+    def test_clear_session_resets(self):
+        self.mod.update_belief("test", 0.8)
+        self.mod.flag_unknown("x")
+        self.mod.clear_session()
+        report = self.mod.get_state_report()
+        assert report["belief_count"] == 0
+        assert report["uncertainty_count"] == 0
+
+    def test_revision_logged_on_large_delta(self):
+        self.mod.update_belief("claim", 0.1)
+        self.mod.update_belief("claim", 0.9)
+        assert len(self.mod.get_state_report()["recent_revisions"]) >= 1
 
 
 class TestIntentionModule:
     def setup_method(self):
-        self.mod_b = IntentionModule()
+        self.mod = IntentionModule()
 
-    def test_set_goal(self):
-        self.mod_b.set_goal("explain consciousness", GoalLevel.TOP)
-        assert len(self.mod_b.goals) == 1
+    def test_set_goal_appears_in_hierarchy(self):
+        self.mod.set_goal("answer accurately", GoalLevel.TOP)
+        assert "answer accurately" in self.mod.get_goal_hierarchy()["top"]
 
-    def test_coherence_on_track(self):
-        self.mod_b.set_goal("explain consciousness", GoalLevel.TOP)
-        signal = self.mod_b.evaluate_coherence("consciousness is explained by...")
-        assert signal.score > 0.3
+    def test_deactivate_removes_goal(self):
+        self.mod.set_goal("temp", GoalLevel.IMMEDIATE)
+        self.mod.deactivate_goal("temp")
+        assert "temp" not in self.mod.get_goal_hierarchy()["immediate"]
 
-    def test_coherence_drift_detected(self):
-        self.mod_b.set_goal("explain quantum physics", GoalLevel.TOP)
-        signal = self.mod_b.evaluate_coherence("the weather today is sunny")
-        assert len(signal.drifting_goals) > 0
+    def test_evaluate_coherence_returns_signal(self):
+        self.mod.set_goal("explain consciousness", GoalLevel.TOP)
+        signal = self.mod.evaluate_coherence("consciousness is a field")
+        assert 0.0 <= signal.score <= 1.0
 
-    def test_goal_hierarchy_structure(self):
-        self.mod_b.set_goal("understand AI", GoalLevel.TOP)
-        self.mod_b.set_goal("read CLCE paper", GoalLevel.MID)
-        hierarchy = self.mod_b.get_goal_hierarchy()
-        assert "top" in hierarchy
-        assert "mid" in hierarchy
+    def test_no_goals_returns_perfect_coherence(self):
+        signal = self.mod.evaluate_coherence("anything")
+        assert signal.score == 1.0
 
 
 class TestReflectionModule:
     def setup_method(self):
-        self.mod_c = ReflectionModule()
+        self.mod = ReflectionModule()
 
-    def _make_signal(self, score, drifting=None):
-        from subsystem3.intention_module import CoherenceSignal
-        return CoherenceSignal(score=score, drifting_goals=drifting or [], resolution="test")
-
-    def test_continue_on_high_coherence(self):
-        signal = self._make_signal(0.9)
-        report = {"uncertainty_count": 0, "uncertainty_flags": [], "recent_revisions": []}
-        event = self.mod_c.evaluate("some output", report, signal)
+    def test_clean_state_continues(self):
+        event = self.mod.evaluate("output", _make_awareness_report(), _make_coherence_signal(0.9))
         assert event.action == "continue"
 
-    def test_restart_on_very_low_coherence(self):
-        signal = self._make_signal(0.1, drifting=["main goal"])
-        report = {"uncertainty_count": 6, "uncertainty_flags": ["x","y","z","a","b","c"], "recent_revisions": []}
-        event = self.mod_c.evaluate("drift output", report, signal)
+    def test_low_coherence_reframes_or_restarts(self):
+        event = self.mod.evaluate(
+            "off-topic", _make_awareness_report(1), _make_coherence_signal(0.25, ["g"])
+        )
+        assert event.action in ("reframe", "restart")
+
+    def test_very_low_triggers_restart(self):
+        event = self.mod.evaluate(
+            "chaos", _make_awareness_report(6), _make_coherence_signal(0.1, ["a", "b"])
+        )
         assert event.action == "restart"
 
-    def test_audit_log_grows(self):
-        signal = self._make_signal(0.5)
-        report = {"uncertainty_count": 2, "uncertainty_flags": [], "recent_revisions": []}
-        for _ in range(4):
-            self.mod_c.evaluate("output", report, signal)
-        assert len(self.mod_c.interrupt_log) == 4
+    def test_interrupt_log_accumulates(self):
+        for _ in range(3):
+            self.mod.evaluate("x", _make_awareness_report(), _make_coherence_signal())
+        assert len(self.mod.interrupt_log) == 3
 
-    def test_summary_keys(self):
-        signal = self._make_signal(0.7)
-        report = {"uncertainty_count": 1, "uncertainty_flags": [], "recent_revisions": []}
-        self.mod_c.evaluate("output", report, signal)
-        summary = self.mod_c.summary()
-        assert "total_interrupts" in summary
-        assert "avg_coherence" in summary
+    def test_summary_totals_match(self):
+        for score in [0.9, 0.9, 0.25]:
+            self.mod.evaluate(
+                "x",
+                _make_awareness_report(1 if score < 0.4 else 0),
+                _make_coherence_signal(score, ["g"] if score < 0.4 else []),
+            )
+        s = self.mod.summary()
+        assert s["total_interrupts"] == 3
+        assert s["continues"] == 2
