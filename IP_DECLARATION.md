@@ -16,8 +16,7 @@ Date:       2026-05-24
 
 ```
 Repo:       https://github.com/sENZ5hFx/cross-layer-consciousness-framework
-Description: Cross-ontological framework mapping consciousness theories, the Big Map 10-layer reality model, and an upgraded architecture beyond QNHF.
-Inventor:   Haley Ann Bird
+Description: A cross-ontological framework mapping consciousness theories, the Big Map 10-layer reality model, and an upgraded architecture beyond QNHF — built by Haley Bird
 License:    Business Source License 1.1
 Change Date: 2029-05-24
 ```
@@ -28,19 +27,19 @@ Change Date: 2029-05-24
 Copyright (C) 2026 Haley Ann Bird. All rights reserved.
 ```
 
-## Research IP & Authorship
-
-This repository constitutes an original research contribution by Haley Ann Bird. The cross-layer consciousness mapping framework, Big Map 10-layer architecture, QNHF upgrade, and all associated theoretical and computational work are the sole intellectual property of Haley Ann Bird.
-
-Protected as original works of authorship under 17 U.S.C. § 101 et seq. from the moment of creation.
-
-## Trade Secrets
+## Trade Secrets & Original Work
 
 Protected under 18 U.S.C. § 1836 (DTSA) and IC 24-2-3 (Indiana UTSA):
 
-- Proprietary cross-ontological mapping methodology
-- Big Map 10-layer reality model architecture
-- Novel QNHF upgrade design and theoretical extensions
+- Cross-ontological framework architecture mapping consciousness theories
+- Big Map 10-layer reality model design and layer specifications
+- Upgraded architecture beyond QNHF — novel theoretical framework
+- Cross-layer mapping algorithms and ontology resolution logic
+- Integration with NeuroCatalyst™ personal intelligence system
+
+## Authorship Note
+
+This framework was conceived and architected by Haley Ann Bird on 2026-05-24. The Big Map model, the cross-layer consciousness mapping methodology, and the upgrade pathway beyond QNHF are original intellectual contributions by Haley Ann Bird.
 
 ## Declaration
 

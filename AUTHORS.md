@@ -1,9 +1,14 @@
 # Authors
 
-| Name | Role | Contact |
-|------|------|---------|
-| Haley Ann Bird | Sole inventor and author | heyhaleybird@gmail.com |
+## Creator & Sole Author
 
-All theoretical frameworks, computational models, and written content in this repository were created solely by Haley Ann Bird.
+**Haley Ann Bird**
+- GitHub: [@sENZ5hFx](https://github.com/sENZ5hFx)
+- Email: heyhaleybird@gmail.com
+- Location: Fishers, Indiana, USA
 
-Date of original creation: 2026-05-24
+## Original Work Date
+
+2026-05-24 — Framework conceived, architected, and published by Haley Ann Bird.
+
+All theoretical contributions, framework designs, and cross-layer mapping systems in this repository are original work by Haley Ann Bird.
