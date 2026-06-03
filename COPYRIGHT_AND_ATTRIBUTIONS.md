@@ -2,8 +2,4 @@
 
 **Copyright © 2026 Haley Ann Bird. All rights reserved.**
 
-| Contributor | Role |
-|-------------|------|
-| Haley Ann Bird | Sole Author & Inventor |
-
-BSL-1.1 License. Contact: heyhaleybird@gmail.com
+Sole author: Haley Ann Bird, Fishers, Indiana, USA. BSL-1.1. Contact: heyhaleybird@gmail.com
